@@ -6,6 +6,7 @@ import os
 import shutil
 from datetime import datetime
 from typing import IO, Any
+from PIL import Image
 
 import cloudscraper  # type: ignore[import]
 from requests.structures import CaseInsensitiveDict
@@ -203,7 +204,22 @@ class BasePixivAPI:
             name = prefix + str(name or fname or os.path.basename(url))
             file = os.path.join(path, name)
             if os.path.exists(file) and not replace:
-                return False
+                is_broken = True
+                image = None
+                try:
+                    image = Image.open(file)
+                    image.load()
+                    is_broken = False
+                    return False
+                except Exception as e:
+                    print(f"Image.open failed: {e} for {file}")
+                finally:
+                    if image:
+                        image.close()
+                if is_broken:
+                    os.remove(file)
+                else:
+                    return False
 
         with self.requests_call("GET", url, headers={"Referer": referer}, stream=True) as response:
             if isinstance(file, str):
@@ -211,4 +227,14 @@ class BasePixivAPI:
                     shutil.copyfileobj(response.raw, out_file)
             else:
                 shutil.copyfileobj(response.raw, file)  # type: ignore[arg-type]
+        if isinstance(file, str):
+            # load image to check if it's broken
+            try:
+                image = Image.open(file)
+                image.load()
+                image.close()
+            except Exception as e:
+                print(f"Image.open failed: {e} for {file}")
+                os.remove(file)
+                raise PixivError(f"Image.open failed: {e} for {file}")
         return True
