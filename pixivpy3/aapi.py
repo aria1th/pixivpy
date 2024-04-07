@@ -491,7 +491,15 @@ class AppPixivAPI(BasePixivAPI):
             params["search_ai_type"] = search_ai_type
         if offset:
             params["offset"] = offset
-        r = self.no_auth_requests_call("GET", url, params=params, req_auth=req_auth)
+        while True:
+            try:
+                r = self.no_auth_requests_call("GET", url, params=params, req_auth=req_auth)
+                break
+            except PixivError as e:
+                # if Rate Limit, retry after 1 minute
+                if e.reason == "Rate Limit":
+                    time.sleep(60)
+                    continue
         return self.parse_result(r)
 
     # 搜索小说 (Search Novel)
